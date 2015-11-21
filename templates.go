@@ -76,6 +76,10 @@ func (r *TemplateRender) Template(templates ...string) (*template.Template, erro
 }
 
 func (r *TemplateRender) Render(w http.ResponseWriter, params map[string]interface{}, temps ...string) (err error) {
+  if nil == params {
+    params = map[string]interface{}{}
+  }
+
   var tpl *template.Template
   if tpl, err = r.Template(temps...); nil != err {
     http.Error(w, err.Error(), http.StatusInternalServerError)
