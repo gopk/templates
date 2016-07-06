@@ -7,6 +7,7 @@ package templates
 
 import (
 	"html/template"
+	"io"
 	"io/ioutil"
 	"path/filepath"
 	"regexp"
