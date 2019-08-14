@@ -26,9 +26,15 @@ type TemplateRender struct {
 	funcs        template.FuncMap
 	handlers     map[int]RseponseHandler
 	cache        map[string]*template.Template
+	Params       map[string]interface{}
 	CacheEnabled bool
 }
 
+// MakeRender creates new template render with some option params
+// @param path - to the directory of templates
+// @param postfix - after file name. You can render template just with name "index", "search"
+//                  and etc and set the extension of file in the postfix
+// @param enabledCache - option
 func MakeRender(path, postfix string, enabledCache bool) *TemplateRender {
 	if len(postfix) > 1 {
 		postfix = "." + postfix
@@ -42,19 +48,22 @@ func MakeRender(path, postfix string, enabledCache bool) *TemplateRender {
 	}
 }
 
+// Func register function in template render
 func (r *TemplateRender) Func(key string, value interface{}) *TemplateRender {
 	r.funcs[key] = value
 	return r
 }
 
+// RegisterHandler for reaction for some response code
 func (r *TemplateRender) RegisterHandler(code int, handler RseponseHandler) *TemplateRender {
-	if nil == r.handlers {
+	if r.handlers == nil {
 		r.handlers = make(map[int]RseponseHandler)
 	}
 	r.handlers[code] = handler
 	return r
 }
 
+// Template returns inited template object
 func (r *TemplateRender) Template(templates ...string) (*template.Template, error) {
 	key := strings.Join(templates, ":")
 	if t, ok := r.cache[key]; ok {
@@ -75,21 +84,27 @@ func (r *TemplateRender) Template(templates ...string) (*template.Template, erro
 	return t, nil
 }
 
+// Render template to the writer interface
 func (r *TemplateRender) Render(w io.Writer, params map[string]interface{}, temps ...string) (err error) {
-	if nil == params {
+	if params == nil {
 		params = map[string]interface{}{}
 	}
 
+	for key, val := range r.Params {
+		params[key] = val
+	}
+
 	var tpl *template.Template
-	if tpl, err = r.Template(temps...); nil == err {
+	if tpl, err = r.Template(temps...); err == nil {
 		err = tpl.ExecuteTemplate(w, temps[len(temps)-1], params)
 	}
 	return
 }
 
+// RenderResponse prepared in response object
 func (r *TemplateRender) RenderResponse(resp *HttpResponse) error {
-	if nil != r.handlers {
-		if handler, ok := r.handlers[resp.Code]; nil != handler && ok {
+	if r.handlers != nil {
+		if handler, ok := r.handlers[resp.Code]; handler != nil && ok {
 			return handler(resp)
 		}
 	}
@@ -103,12 +118,12 @@ func (r *TemplateRender) RenderResponse(resp *HttpResponse) error {
 func (r *TemplateRender) initTemplates(t *template.Template, tmps []string, exclude *[]string) error {
 	firstLevel := 0 == len(*exclude)
 	for tkey, tpl := range r.prepareTemplates(tmps...) {
-		if nil == t.Lookup(tkey) {
-			if data, err := ioutil.ReadFile(tpl); nil == err {
+		if t.Lookup(tkey) == nil {
+			if data, err := ioutil.ReadFile(tpl); err == nil {
 				tmps := templatesRegex.FindAllStringSubmatch(string(data), -1)
 
 				ntemplates := []string{}
-				if nil != tmps && len(tmps) > 0 {
+				if len(tmps) > 0 {
 					for _, it := range tmps {
 						if sIndexOf(it[1], *exclude) < 0 {
 							*exclude = append(*exclude, it[1])
@@ -149,11 +164,9 @@ func (r *TemplateRender) prepareTemplates(templates ...string) map[string]string
 }
 
 func sIndexOf(v string, arr []string) int {
-	if nil != arr {
-		for i, s := range arr {
-			if s == v {
-				return i
-			}
+	for i, s := range arr {
+		if s == v {
+			return i
 		}
 	}
 	return -1
