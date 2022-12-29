@@ -2,10 +2,10 @@ package templates
 
 import (
 	"bytes"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"text/template"
 
 	"github.com/stretchr/testify/assert"
 
