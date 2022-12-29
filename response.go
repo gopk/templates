@@ -1,6 +1,6 @@
 //
 // @project Templates
-// @author Dmitry Ponomarev <demdxx@gmail.com> 2015
+// @author Dmitry Ponomarev <demdxx@gmail.com> 2015, 2022
 //
 
 package templates
@@ -9,50 +9,51 @@ import (
 	"net/http"
 )
 
-type HttpResponseHandler func(w http.ResponseWriter, r *http.Request) *HttpResponse
+// HTTPResponseHandler represents default HTTP response handlerer
+type HTTPResponseHandler func(w http.ResponseWriter, r *http.Request) *HTTPResponse
 
-type HttpResponse struct {
+// HTTPResponse represents HTTP response with all necessary information
+type HTTPResponse struct {
 	Request  *http.Request
 	Writer   http.ResponseWriter
 	Template string
-	Context  map[string]interface{}
+	Context  Params
 	Error    error
 	Code     int
 }
 
-func Response(code int, template string, ctx map[string]interface{}) *HttpResponse {
-	return &HttpResponse{Code: code, Template: template, Context: ctx}
+// Response returns new response object for HTTPHandler wrapper
+func Response(code int, template string, ctx Params) *HTTPResponse {
+	return &HTTPResponse{Code: code, Template: template, Context: ctx}
 }
 
-func (resp *HttpResponse) SetBase(w http.ResponseWriter, r *http.Request) *HttpResponse {
-	resp.Writer = w
-	resp.Request = r
-	return resp
-}
-
-func (resp *HttpResponse) UpdateContext(ctx map[string]interface{}) *HttpResponse {
-	if nil == resp.Context {
+// ExtendParams which will be passed to the renderer
+func (resp *HTTPResponse) ExtendParams(ctx Params) *HTTPResponse {
+	if resp.Context == nil {
 		resp.Context = ctx
-	} else if nil != ctx {
-		for k, v := range resp.Context {
+	} else {
+		for k, v := range ctx {
 			resp.Context[k] = v
 		}
 	}
 	return resp
 }
 
-func (resp *HttpResponse) SetContext(ctx map[string]interface{}) *HttpResponse {
+// SetParams which will be passed to the renderer
+func (resp *HTTPResponse) SetParams(ctx Params) *HTTPResponse {
 	resp.Context = ctx
 	return resp
 }
 
-func HttpHandler(render *TemplateRender, f HttpResponseHandler) http.HandlerFunc {
-	if nil == render {
-		render = GlobalRender
-	}
+// HTTPHandler reponse wrapper for default http handler
+//
+// Example:
+// mux := http.NewServeMux()
+// mux.HandleFunc("/", HTTPHandler(render, func(w http.ResponseWriter, r *http.Request) *HTTPResponse){ return Response(http.StatusOK, "index", params) })
+// mux.HandleFunc("/hello", HTTPHandler(render, getHello))
+func HTTPHandler(render *Renderer, f HTTPResponseHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		resp := f(w, r)
-		if nil != resp {
+		if resp := f(w, r); resp != nil {
 			resp.Writer = w
 			resp.Request = r
 			render.RenderResponse(resp)

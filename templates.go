@@ -1,6 +1,6 @@
 //
 // @project Templates
-// @author Dmitry Ponomarev <demdxx@gmail.com> 2015
+// @author Dmitry Ponomarev <demdxx@gmail.com> 2015, 2022
 //
 
 package templates
@@ -8,7 +8,9 @@ package templates
 import (
 	"html/template"
 	"io"
-	"io/ioutil"
+	"io/fs"
+	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -18,91 +20,117 @@ var (
 	templatesRegex = regexp.MustCompile("\\{\\{\\s*template\\s*['\"]([^'\"]+)['\"][^\\}]*\\}\\}")
 )
 
-type RseponseHandler func(*HttpResponse) error
+// Params of the renderer
+type Params map[string]any
 
-type TemplateRender struct {
-	path         string
-	postfix      string
-	funcs        template.FuncMap
-	handlers     map[int]RseponseHandler
-	cache        map[string]*template.Template
-	Params       map[string]interface{}
+// ResponseHandler for the particular HTTP code
+type ResponseHandler func(*HTTPResponse) error
+
+// Renderer defines new renderer object
+type Renderer struct {
+	Path         string
+	Postfix      string
+	SourceFS     fs.FS
+	Params       Params
 	CacheEnabled bool
+
+	funcs    template.FuncMap
+	handlers map[int]ResponseHandler
+	cache    map[string]*template.Template
 }
 
-// MakeRender creates new template render with some option params
+// New creates new template Renderer with some option params
 // @param path - to the directory of templates
-// @param postfix - after file name. You can render template just with name "index", "search"
-//                  and etc and set the extension of file in the postfix
+// @param postfix - after file name. You can Renderer template just with name "index", "search"
+// and etc and set the extension of file in the postfix
 // @param enabledCache - option
-func MakeRender(path, postfix string, enabledCache bool) *TemplateRender {
+func New(path, postfix string, enabledCache bool) *Renderer {
+	return NewFS(nil, path, postfix, enabledCache)
+}
+
+// NewFS creates new template Renderer with some option params for FS object
+// @param fs - preinited directory in memory
+// @param path - to the directory of templates inside FS
+// @param postfix - after file name. You can Renderer template just with name "index", "search"
+// and etc and set the extension of file in the postfix
+// @param enabledCache - option
+func NewFS(fs fs.FS, path, postfix string, enabledCache bool) *Renderer {
 	if len(postfix) > 1 {
 		postfix = "." + postfix
 	}
-	return &TemplateRender{
-		path:         path,
-		postfix:      postfix,
+	return &Renderer{
+		Path:         path,
+		Postfix:      postfix,
+		SourceFS:     fs,
 		CacheEnabled: enabledCache,
 		cache:        make(map[string]*template.Template),
 		funcs:        make(template.FuncMap),
 	}
 }
 
-// Func register function in template render
-func (r *TemplateRender) Func(key string, value interface{}) *TemplateRender {
+// Func register function in template Renderer
+func (r *Renderer) Func(key string, value any) *Renderer {
 	r.funcs[key] = value
 	return r
 }
 
+// Funcs register functions in template Renderer
+func (r *Renderer) Funcs(funcs template.FuncMap) *Renderer {
+	for fkey, fk := range funcs {
+		r.funcs[fkey] = fk
+	}
+	return r
+}
+
 // RegisterHandler for reaction for some response code
-func (r *TemplateRender) RegisterHandler(code int, handler RseponseHandler) *TemplateRender {
+func (r *Renderer) RegisterHandler(code int, handler ResponseHandler) *Renderer {
 	if r.handlers == nil {
-		r.handlers = make(map[int]RseponseHandler)
+		r.handlers = make(map[int]ResponseHandler)
 	}
 	r.handlers[code] = handler
 	return r
 }
 
-// Template returns inited template object
-func (r *TemplateRender) Template(templates ...string) (*template.Template, error) {
+// Template parse and return new template object with all related sub templates
+func (r *Renderer) Template(templates ...string) (*template.Template, error) {
 	key := strings.Join(templates, ":")
 	if t, ok := r.cache[key]; ok {
 		return t, nil
 	}
-
-	t := template.New("").Funcs(r.funcs)
-
-	exclude := []string{}
-	if err := r.initTemplates(t, templates, &exclude); nil != err {
+	var (
+		templ   = template.New("").Funcs(r.funcs)
+		exclude = []string{}
+	)
+	if err := r.initTemplates(templ, templates, &exclude); nil != err {
 		return nil, err
 	}
-
 	if r.CacheEnabled {
-		r.cache[key] = t
+		r.cache[key] = templ
 	}
-
-	return t, nil
+	return templ, nil
 }
 
 // Render template to the writer interface
-func (r *TemplateRender) Render(w io.Writer, params map[string]interface{}, temps ...string) (err error) {
+// The last template in the list will be main rendering template
+//
+// Example:
+// render.Render(out, nil, "layouts/main", "index") // "index" as a target template
+func (r *Renderer) Render(w io.Writer, params Params, templates ...string) (err error) {
 	if params == nil {
-		params = map[string]interface{}{}
+		params = make(Params, len(r.Params))
 	}
-
 	for key, val := range r.Params {
 		params[key] = val
 	}
-
 	var tpl *template.Template
-	if tpl, err = r.Template(temps...); err == nil {
-		err = tpl.ExecuteTemplate(w, temps[len(temps)-1], params)
+	if tpl, err = r.Template(templates...); err == nil {
+		err = tpl.ExecuteTemplate(w, templates[len(templates)-1], params)
 	}
-	return
+	return err
 }
 
 // RenderResponse prepared in response object
-func (r *TemplateRender) RenderResponse(resp *HttpResponse) error {
+func (r *Renderer) RenderResponse(resp *HTTPResponse) error {
 	if r.handlers != nil {
 		if handler, ok := r.handlers[resp.Code]; handler != nil && ok {
 			return handler(resp)
@@ -111,18 +139,29 @@ func (r *TemplateRender) RenderResponse(resp *HttpResponse) error {
 	return r.Render(resp.Writer, resp.Context, resp.Template)
 }
 
+// HTTPHandler wraps http handler as render function
+//
+// Example:
+// mux := http.NewServeMux()
+// mux.HandleFunc("/", render.HTTPHandler(func(w http.ResponseWriter, r *http.Request) *HTTPResponse { return Response(http.StatusOK, "index", params) })
+// mux.HandleFunc("/hello", render.HTTPHandler(getHello))
+func (r *Renderer) HTTPHandler(f HTTPResponseHandler) http.HandlerFunc {
+	return HTTPHandler(r, f)
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Internal
 ///////////////////////////////////////////////////////////////////////////////
 
-func (r *TemplateRender) initTemplates(t *template.Template, tmps []string, exclude *[]string) error {
-	firstLevel := 0 == len(*exclude)
+func (r *Renderer) initTemplates(t *template.Template, tmps []string, exclude *[]string) error {
+	firstLevel := len(*exclude) == 0
 	for tkey, tpl := range r.prepareTemplates(tmps...) {
 		if t.Lookup(tkey) == nil {
-			if data, err := ioutil.ReadFile(tpl); err == nil {
-				tmps := templatesRegex.FindAllStringSubmatch(string(data), -1)
-
-				ntemplates := []string{}
+			if data, err := r.readFile(tpl); err == nil {
+				var (
+					ntemplates []string
+					tmps       = templatesRegex.FindAllStringSubmatch(string(data), -1)
+				)
 				if len(tmps) > 0 {
 					for _, it := range tmps {
 						if sIndexOf(it[1], *exclude) < 0 {
@@ -154,10 +193,22 @@ func (r *TemplateRender) initTemplates(t *template.Template, tmps []string, excl
 // Helpers
 ///////////////////////////////////////////////////////////////////////////////
 
-func (r *TemplateRender) prepareTemplates(templates ...string) map[string]string {
-	ntpls := make(map[string]string)
+func (r *Renderer) readFile(filename string) ([]byte, error) {
+	if r.SourceFS != nil {
+		file, err := r.SourceFS.Open(filename)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+		return io.ReadAll(file)
+	}
+	return os.ReadFile(filename)
+}
+
+func (r *Renderer) prepareTemplates(templates ...string) map[string]string {
+	ntpls := make(map[string]string, len(templates))
 	for _, t := range templates {
-		fpath := filepath.Join(r.path, t+r.postfix)
+		fpath := filepath.Join(r.Path, t+r.Postfix)
 		ntpls[t] = fpath
 	}
 	return ntpls
