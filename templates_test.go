@@ -26,6 +26,7 @@ func TestTemplate(t *testing.T) {
 	t.Run("register/funcs", func(t *testing.T) {
 		assert.NotNil(t, render.Func("f1", func() string { return "f1" }))
 		assert.NotNil(t, render.Funcs(template.FuncMap{"f2": func() string { return "f2" }}))
+		assert.Equal(t, 2, len(render.FuncList()))
 	})
 
 	t.Run("register/handlers", func(t *testing.T) {

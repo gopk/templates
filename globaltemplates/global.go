@@ -52,6 +52,11 @@ func Funcs(funcs template.FuncMap) *templates.Renderer {
 	return G().Funcs(funcs)
 }
 
+// FuncList returns the list of prepared template function
+func FuncList() template.FuncMap {
+	return G().FuncList()
+}
+
 // RegisterHandler for global renderer
 func RegisterHandler(code int, handler templates.ResponseHandler) *templates.Renderer {
 	return G().RegisterHandler(code, handler)

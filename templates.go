@@ -82,6 +82,11 @@ func (r *Renderer) Funcs(funcs template.FuncMap) *Renderer {
 	return r
 }
 
+// FuncList returns the list of prepared template function
+func (r *Renderer) FuncList() template.FuncMap {
+	return r.funcs
+}
+
 // RegisterHandler for reaction for some response code
 func (r *Renderer) RegisterHandler(code int, handler ResponseHandler) *Renderer {
 	if r.handlers == nil {
