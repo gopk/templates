@@ -56,7 +56,9 @@ func HTTPHandler(render *Renderer, f HTTPResponseHandler) http.HandlerFunc {
 		if resp := f(w, r); resp != nil {
 			resp.Writer = w
 			resp.Request = r
-			render.RenderResponse(resp)
+			if err := render.RenderResponse(resp); err != nil {
+				http.Error(w, "Invalid response render", http.StatusInternalServerError)
+			}
 		} else {
 			http.Error(w, "Invalid http response", http.StatusInternalServerError)
 		}
