@@ -21,6 +21,7 @@ func TestTemplate(t *testing.T) {
 		assert.NotNil(t, render)
 		render = NewFS(testtemplates.Content, "", ".tpl.html", true)
 		assert.NotNil(t, render)
+		assert.NotNil(t, render.SetDelims("{{", "}}"))
 	})
 
 	t.Run("register/funcs", func(t *testing.T) {

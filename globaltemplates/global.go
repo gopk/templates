@@ -58,6 +58,11 @@ func FuncList() template.FuncMap {
 	return G().FuncList()
 }
 
+// SetDelims of the template
+func SetDelims(start, end string) *templates.Renderer {
+	return G().SetDelims(start, end)
+}
+
 // RegisterHandler for global renderer
 func RegisterHandler(code int, handler templates.ResponseHandler) *templates.Renderer {
 	return G().RegisterHandler(code, handler)
@@ -86,4 +91,9 @@ func RenderResponse(resp *templates.HTTPResponse) error {
 // mux.HandleFunc("/hello", render.HTTPHandler(getHello))
 func HTTPHandler(f templates.HTTPResponseHandler) http.HandlerFunc {
 	return G().HTTPHandler(f)
+}
+
+// ResetCache of templates
+func ResetCache() {
+	G().ResetCache()
 }

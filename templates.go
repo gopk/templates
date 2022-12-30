@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 var (
@@ -28,10 +29,14 @@ type ResponseHandler func(*HTTPResponse) error
 
 // Renderer defines new renderer object
 type Renderer struct {
+	mx sync.Mutex
+
 	Path         string
 	Postfix      string
 	SourceFS     fs.FS
 	Params       Params
+	DelimStart   string
+	DelimEnd     string
 	CacheEnabled bool
 
 	funcs    template.FuncMap
@@ -87,6 +92,14 @@ func (r *Renderer) FuncList() template.FuncMap {
 	return r.funcs
 }
 
+// SetDelims of the template
+func (r *Renderer) SetDelims(start, end string) *Renderer {
+	r.DelimStart = start
+	r.DelimEnd = end
+	r.ResetCache()
+	return r
+}
+
 // RegisterHandler for reaction for some response code
 func (r *Renderer) RegisterHandler(code int, handler ResponseHandler) *Renderer {
 	if r.handlers == nil {
@@ -98,6 +111,8 @@ func (r *Renderer) RegisterHandler(code int, handler ResponseHandler) *Renderer 
 
 // Template parse and return new template object with all related sub templates
 func (r *Renderer) Template(templates ...string) (*template.Template, error) {
+	r.mx.Lock()
+	defer r.mx.Unlock()
 	key := strings.Join(templates, ":")
 	if t, ok := r.cache[key]; ok {
 		return t, nil
@@ -106,6 +121,9 @@ func (r *Renderer) Template(templates ...string) (*template.Template, error) {
 		templ   = template.New("").Funcs(r.funcs)
 		exclude = []string{}
 	)
+	if r.DelimStart != "" {
+		templ = templ.Delims(r.DelimStart, r.DelimEnd)
+	}
 	if err := r.initTemplates(templ, templates, &exclude); nil != err {
 		return nil, err
 	}
@@ -152,6 +170,13 @@ func (r *Renderer) RenderResponse(resp *HTTPResponse) error {
 // mux.HandleFunc("/hello", render.HTTPHandler(getHello))
 func (r *Renderer) HTTPHandler(f HTTPResponseHandler) http.HandlerFunc {
 	return HTTPHandler(r, f)
+}
+
+// ResetCache of templates
+func (r *Renderer) ResetCache() {
+	r.mx.Lock()
+	defer r.mx.Unlock()
+	r.cache = make(map[string]*template.Template, len(r.cache))
 }
 
 ///////////////////////////////////////////////////////////////////////////////
