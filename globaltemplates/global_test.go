@@ -17,8 +17,8 @@ func TestTemplate(t *testing.T) {
 	a404 := false
 
 	t.Run("init", func(t *testing.T) {
-		assert.NotNil(t, Set("", "tpl.html", true))
-		assert.NotNil(t, SetFS(testtemplates.Content, "", "tpl.html", true))
+		assert.NotNil(t, Set("", ".tpl.html", true))
+		assert.NotNil(t, SetFS(testtemplates.Content, "", ".tpl.html", true))
 	})
 
 	t.Run("register/funcs", func(t *testing.T) {

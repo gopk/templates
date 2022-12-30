@@ -56,7 +56,7 @@ func New(path, postfix string, enabledCache bool) *Renderer {
 // @param enabledCache - option
 func NewFS(fs fs.FS, path, postfix string, enabledCache bool) *Renderer {
 	if len(postfix) > 1 {
-		postfix = "." + postfix
+		postfix = "." + strings.TrimLeft(postfix, ".")
 	}
 	return &Renderer{
 		Path:         path,

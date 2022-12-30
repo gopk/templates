@@ -17,9 +17,9 @@ func TestTemplate(t *testing.T) {
 	var render *Renderer
 
 	t.Run("init", func(t *testing.T) {
-		render = New("", "tpl.html", true)
+		render = New("", ".tpl.html", true)
 		assert.NotNil(t, render)
-		render = NewFS(testtemplates.Content, "", "tpl.html", true)
+		render = NewFS(testtemplates.Content, "", ".tpl.html", true)
 		assert.NotNil(t, render)
 	})
 

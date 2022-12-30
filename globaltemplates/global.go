@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/gopk/templates/v2"
 )
@@ -32,7 +33,7 @@ func SetFS(fs fs.FS, path, postfix string, enabledCache bool) *templates.Rendere
 		Global = templates.NewFS(fs, path, postfix, enabledCache)
 	} else {
 		if postfix != "" {
-			postfix = "." + postfix
+			postfix = "." + strings.TrimLeft(postfix, ".")
 		}
 		Global.SourceFS = fs
 		Global.Path = path
