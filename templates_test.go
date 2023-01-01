@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,14 +15,19 @@ import (
 
 func TestTemplate(t *testing.T) {
 	a404 := false
-	var render *Renderer
+	var render *HTMLRender
 
 	t.Run("init", func(t *testing.T) {
-		render = New("", ".tpl.html", true)
+		renderPlain := NewPlain("", ".tpl.html", true)
+		assert.NotNil(t, renderPlain)
+		renderPlain = NewPlainFS(testtemplates.Content, "", ".tpl.html", true)
+		assert.NotNil(t, renderPlain)
+		render = NewHTML("", ".tpl.html", true)
 		assert.NotNil(t, render)
-		render = NewFS(testtemplates.Content, "", ".tpl.html", true)
+		render = NewHTMLFS(testtemplates.Content, "", ".tpl.html", true)
 		assert.NotNil(t, render)
 		assert.NotNil(t, render.SetDelims("{{", "}}"))
+		render.Params = Params{"global": "param"}
 	})
 
 	t.Run("register/funcs", func(t *testing.T) {
@@ -42,6 +48,7 @@ func TestTemplate(t *testing.T) {
 
 	t.Run("render", func(t *testing.T) {
 		buff := &bytes.Buffer{}
+		assert.NoError(t, render.Render(buff, nil, "index"))
 		assert.NoError(t, render.Render(buff, Params{"p1": 1}, "index"))
 		assert.NotEmpty(t, buff.String())
 	})
@@ -61,5 +68,17 @@ func TestTemplate(t *testing.T) {
 		})
 		fnk(&httptest.ResponseRecorder{}, httptest.NewRequest("GET", "/", nil))
 		assert.Equal(t, true, a404)
+
+		var resp1 = httptest.NewRecorder()
+		errFnk1 := render.HTTPHandler(func(w http.ResponseWriter, r *http.Request) *HTTPResponse {
+			return Response(http.StatusInternalServerError, "", nil)
+		})
+		errFnk1(resp1, httptest.NewRequest("GET", "/", nil))
+		assert.Equal(t, "Invalid response render", strings.TrimSpace(resp1.Body.String()))
+
+		var resp2 = httptest.NewRecorder()
+		errFnk2 := render.HTTPHandler(func(w http.ResponseWriter, r *http.Request) *HTTPResponse { return nil })
+		errFnk2(resp2, httptest.NewRequest("GET", "/", nil))
+		assert.Equal(t, "Invalid http response", strings.TrimSpace(resp2.Body.String()))
 	})
 }

@@ -51,9 +51,9 @@ func (resp *HTTPResponse) SetParams(ctx Params) *HTTPResponse {
 // mux := http.NewServeMux()
 // mux.HandleFunc("/", HTTPHandler(render, func(w http.ResponseWriter, r *http.Request) *HTTPResponse){ return Response(http.StatusOK, "index", params) })
 // mux.HandleFunc("/hello", HTTPHandler(render, getHello))
-func HTTPHandler(render *Renderer, f HTTPResponseHandler) http.HandlerFunc {
+func HTTPHandler[T templateIfaceTypes[TT, FM], TT templateTypes, FM ~map[string]any](render *render[T, TT, FM], f HTTPResponseHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if resp := f(w, r); resp != nil {
+		if resp := f(w, r.WithContext(WithContext(r.Context(), render))); resp != nil {
 			resp.Writer = w
 			resp.Request = r
 			if err := render.RenderResponse(resp); err != nil {
