@@ -173,6 +173,12 @@ func (r *render[T, TT, FM]) SetDelims(start, end string) *render[T, TT, FM] {
 	return r
 }
 
+// SetDefaults params for the render as default params
+func (r *render[T, TT, FM]) SetDefaults(params Params) *render[T, TT, FM] {
+	r.Params = params
+	return r
+}
+
 // RegisterHandler for reaction for some response code
 func (r *render[T, TT, FM]) RegisterHandler(code int, handler ResponseHandler) *render[T, TT, FM] {
 	if r.handlers == nil {
